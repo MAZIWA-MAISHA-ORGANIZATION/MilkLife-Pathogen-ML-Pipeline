@@ -31,8 +31,10 @@ MilkLife-Pathogen-ML-Pipeline/
 │   ├── model.py               # 1D-CNN (separable convolutions, Functional API)
 │   ├── train.py               # Training loop with custom callbacks
 │   ├── evaluate.py            # Confusion matrix, F1, ROC-AUC evaluation
-│   └── export_tflite.py       # Int8 post-training quantisation → .tflite
+│   ├── export_tflite.py       # Int8 post-training quantisation → .tflite
+│   └── explain.py             # SHAP-based Explainable AI (XAI) analysis
 ├── artifacts/                 # Auto-generated models & logs (git-ignored)
+├── results/                   # SHAP visualisations & explainability plots
 ├── requirements.txt
 └── README.md
 ```
@@ -47,6 +49,7 @@ MilkLife-Pathogen-ML-Pipeline/
 | `train.py` | Orchestrates dataset creation, model compilation, and fitting. Configures `EarlyStopping`, `ModelCheckpoint`, `ReduceLROnPlateau`, and `TensorBoard` callbacks. |
 | `evaluate.py` | Loads the best checkpoint and computes a full confusion matrix, per-class and macro F1-Score, and one-vs-rest macro ROC-AUC on the held-out test set. |
 | `export_tflite.py` | Converts the trained `.keras` model into a **fully int8-quantised** `.tflite` flatbuffer using a representative calibration dataset. Includes a smoke-test to verify inference. |
+| `explain.py` | SHAP-based explainability module. Uses `GradientExplainer` to compute per-channel, per-timestep Shapley values. Generates channel importance bar charts and beeswarm summary plots saved to `results/`. |
 
 ---
 
@@ -90,15 +93,41 @@ python -m src.evaluate
 
 # Export to quantised TFLite
 python -m src.export_tflite
+
+# Generate SHAP explainability plots
+python -m src.explain
 ```
 
-All artifacts (trained model, TFLite flatbuffer, TensorBoard logs) are written to `artifacts/`.
+All artifacts (trained model, TFLite flatbuffer, TensorBoard logs) are written to `artifacts/`.  
+SHAP visualisations are saved to `results/`.
 
 ### Monitor Training
 
 ```bash
 tensorboard --logdir artifacts/logs
 ```
+
+---
+
+## Explainable AI (XAI)
+
+In diagnostic systems intended for clinical or food-safety contexts, model transparency is not optional — it is an ethical and regulatory imperative. A "black box" classifier that flags a milk batch as contaminated without justification is unacceptable to veterinary review boards and public health authorities.
+
+This pipeline integrates **SHAP (SHapley Additive exPlanations)** to provide mathematically grounded, per-prediction attributions that decompose the model's output into the additive contribution of each sensor channel at each timestep.
+
+### Why SHAP?
+
+| Property | Benefit for Clinical Review |
+|---|---|
+| **Theoretical foundation** | Shapley values are the *unique* attribution method satisfying efficiency, symmetry, dummy, and additivity axioms — ensuring attributions are fair and consistent. |
+| **Per-channel granularity** | Reviewers can verify that the model relies on biologically plausible signals (e.g., pH depression from acid-producing *E. coli*) rather than dataset artefacts. |
+| **Class-conditional analysis** | Separate importance profiles for each pathogen class enable domain experts to validate that learned features align with known metabolic signatures. |
+| **Auditability** | Saved visualisations (`results/shap_summary.png`, `results/shap_channel_importance.png`) provide a permanent, reproducible audit trail for regulatory submissions. |
+
+Running `python -m src.explain` after training will produce:
+
+- **`shap_channel_importance.png`** — Bar chart showing mean |SHAP| per sensor channel per class.  
+- **`shap_summary.png`** — Beeswarm plots of the top-20 most influential (timestep × channel) features for each classification target.
 
 ---
 
