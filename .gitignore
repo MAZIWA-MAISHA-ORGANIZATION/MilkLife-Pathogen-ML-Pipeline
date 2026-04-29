@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# MilkLife pipeline artifacts (models, TFLite exports, logs)
+artifacts/
